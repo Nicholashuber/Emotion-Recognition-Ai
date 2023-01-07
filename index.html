@@ -1,0 +1,117 @@
+<html>
+  <head>
+    <title>Emotion Classifier</title>
+  </head>
+  <body>
+    <h1>Emotion Classifier</h1>
+    <p>Look at the camera and make a face!</p>
+    <p>Your emotion is: <span id="emotion">???</span></p>
+    <video id="video" width="640" height="480" autoplay></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
+
+    <!-- Load TensorFlow.js -->
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tracking/build/tracking.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tracking.js/1.1.2/data/face.js"></script>
+
+    <script>
+      // Set up video
+      const video = document.getElementById('video');
+
+      navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+  console.log('Webcam initialized');
+  video.srcObject = stream;
+}).catch((error) => {
+  console.error('Error accessing webcam:', error);
+});
+
+      const canvas = document.getElementById('canvas');
+      const context = canvas.getContext('2d');
+      const tracker = new tracking.ObjectTracker('face');
+      tracker.setInitialScale(4);
+      tracker.setStepSize(2);
+      tracker.setEdgesDensity(0.1);
+      tracking.track('#video', tracker, { camera: true });
+      tracker.on('track', function(event) {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        event.data.forEach(function(rect) {
+          context.strokeStyle = '#a64ceb';
+          context.strokeRect(rect.x, rect.y, rect.width, rect.height);
+          context.font = '11px Helvetica';
+          context.fillStyle = "#fff";
+          context.fillText('x: ' + rect.x + 'px', rect.x + rect.width + 5, rect.y + 11);
+          context.fillText('y: ' + rect.y + 'px', rect.x + rect.width + 5, rect.y + 22);
+        });
+      });
+
+      // Set up model
+      const MODEL_URL = 'https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_1.0_224/model.json';
+      let model;
+      async function loadModel() {
+        model = await tf.loadLayersModel(MODEL_URL);
+        console.log('Model Loaded');
+      }
+      /*await loadModel();
+
+      // Classify emotion on each frame
+      setInterval(async () => {
+        const emotion = await classifyEmotion();
+        document.getElementById('emotion').innerText = emotion;
+        console.log(emotion);
+      }, 1000);*/
+
+
+      loadModel().then(() => {
+  setInterval(async () => {
+    const emotion = await classifyEmotion();
+    document.getElementById('emotion').innerText = emotion;
+    console.log(emotion);
+  }, 1000);
+});
+
+      async function classifyEmotion() {
+        // Get image data from canvas
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+        // Pre-process the image data to match the format of the model input
+        const tensor = preprocessImage(imageData);
+        console.log('tensor2');
+        console.log(tensor);
+
+        // Use the model to classify the emotion
+        const prediction = await model.predict(tensor).data();
+        console.log('prediction');
+        console.log(prediction);
+        console.log('Non-zero values:', prediction.filter((x) => x !== 0));
+        const emotions = ['angry', 'disgusted', 'fearful', 'happy', 'neutral', 'sad', 'surprised'];
+        console.log('prediction Math');
+        console.log(prediction.slice(0, 7).indexOf(Math.max(...prediction.slice(0, 7))));
+        console.log(emotions[prediction.slice(0, 7).indexOf(Math.max(...prediction.slice(0, 7)))]);
+        //console.log(prediction.indexOf(0));
+        //console.log(emotions[prediction.indexOf(Math.max(...prediction))]);
+        //return emotions[prediction.indexOf(Math.max(...prediction))];
+        return emotions[prediction.slice(0, 7).indexOf(Math.max(...prediction.slice(0, 7)))];
+      }
+
+      function preprocessImage(imageData) {
+        // Convert the image data to a tensor
+        let tensor = tf.browser.fromPixels(imageData, 3);
+        console.log('tensor');
+        //console.log('tensor'+tensor);
+        //tensor.print();
+        //console.log(tensor.shape);
+        //console.log(tensor.data());
+        // Resize the tensor to match the model input dimensions
+        tensor = tf.image.resizeBilinear(tensor, [224, 224]);
+
+        // Normalize the tensor values to the range [0, 1]
+        tensor = tensor.div(255);
+
+        // Add a batch dimension to the tensor
+        tensor = tensor.expandDims(0);
+        console.log(tensor.shape);
+        return tensor;
+      }
+    </script>
+  </body>
+</html>
